@@ -8,6 +8,7 @@ target
 *.ipr
 .idea
 *.DS_Store
+*.properties
 
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
