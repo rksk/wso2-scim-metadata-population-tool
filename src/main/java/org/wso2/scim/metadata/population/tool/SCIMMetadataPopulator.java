@@ -15,18 +15,31 @@ class SCIMMetadataPopulator {
     private static String baseLocation;
     private static boolean debug;
     private static int added, renamed, updated, deleted, failed;
-    private static ConfigParser configParser;
+    private static ConfigParser commonConfigs, userstoreConfigs;
 
     public static void main(String[] args) {
 
         try {
-            configParser = new ConfigParser();
-            tenantId = Integer.parseInt(configParser.getProperty("TENANT_ID"));
-            userstoreDomain = configParser.getProperty("USERSTORE_DOMAIN").toUpperCase();
-            baseLocation = configParser.getProperty("SCIM_GROUP_RESOURCE_LOCATION");
-            debug = Boolean.valueOf(configParser.getProperty("DEBUG_MODE"));
+            String configFile = null;
+            if(args != null  && args.length == 1) {
+                configFile = args[0];
+            } else {
+                System.out.println("=== Userstore config file is not defined. Please define it as the first parameter. ===\n");
+                System.exit(1);
+            }
 
-            ArrayList<SCIMGroup> allLDAPgroups = LDAPUtils.getAllGroupsFromLDAP();
+            commonConfigs = new ConfigParser();
+            userstoreConfigs = new ConfigParser(configFile);
+            tenantId = Integer.parseInt(userstoreConfigs.getProperty("TENANT_ID"));
+            userstoreDomain = userstoreConfigs.getProperty("USERSTORE_DOMAIN").toUpperCase();
+            baseLocation = commonConfigs.getProperty("SCIM_GROUP_RESOURCE_LOCATION");
+            debug = Boolean.valueOf(commonConfigs.getProperty("DEBUG_MODE"));
+
+            // Test DB connection
+            DBUtils.getDBConnection();
+
+            // Get all LDAP/AD roles
+            ArrayList<SCIMGroup> allLDAPgroups = LDAPUtils.getAllGroupsFromLDAP(userstoreConfigs, debug);
             if (allLDAPgroups.size() == 0) {
                 System.out.println("=== No groups found in the LDAP/AD userstore. ===\n");
                 System.exit(0);
@@ -82,7 +95,6 @@ class SCIMMetadataPopulator {
                 System.out.println("=======================");
                 failed++;
             }
-            System.out.println();
         }
     }
     private static void provisionGroup(SCIMGroup group) throws IdentityException {
@@ -98,13 +110,13 @@ class SCIMMetadataPopulator {
             String existingGroupNameForID = GroupDAO.getGroupNameById(tenantId, group.getId());
             if (existingGroupNameForID == null) {
                 if (debug) {
-                    System.out.printf("Adding group: " + roleName + " with attributes: " + attributes);
+                    System.out.println("Adding group: " + roleName + " with attributes: " + attributes);
                 }
                 GroupDAO.addSCIMGroupAttributes(tenantId, roleName, attributes);
                 added++;
             } else {
                 if (debug) {
-                    System.out.printf("An exiting group found for ID: " + group.getId() +
+                    System.out.println("An exiting group found for ID: " + group.getId() +
                             ". Hence, renaming the existing group: " + existingGroupNameForID + " to: " + roleName);
                 }
                 GroupDAO.updateRoleName(tenantId, existingGroupNameForID, roleName);
@@ -114,7 +126,7 @@ class SCIMMetadataPopulator {
             }
         } else {
             if (debug) {
-                System.out.printf("An exiting group found with the same name. Hence, just updating attributes of: " + roleName);
+                System.out.println("An exiting group found with the same name. Hence, just updating attributes of: " + roleName);
             }
             GroupDAO.updateSCIMGroupAttributes(tenantId, roleName, attributes);
             updated++;
@@ -128,8 +140,17 @@ class SCIMMetadataPopulator {
             String roleName = userstoreDomain + "/" + group.getName();
             allSCIMGroups.remove(roleName);
         }
-        System.out.printf("\n=== " + allSCIMGroups.size() + " group(s) found in the Identity DB which are not in the " +
-                "LDAP/AD userstore. ===\n");
+        System.out.println("\n=== " + allSCIMGroups.size() + " group(s) found in the Identity DB which are not in the " +
+                "LDAP/AD userstore. ===");
+
+        boolean deprovisionGroups = Boolean.parseBoolean(commonConfigs.getProperty("DEPROVISION_GROUPS"));
+        if (!deprovisionGroups) {
+            System.out.println("Group deprovisioning is disabled, hence the following groups will be kept in the " +
+                    "Identity DB without getting removed.");
+            System.out.println(allSCIMGroups.toString());
+            return;
+        }
+        
         if (allSCIMGroups.size() > 0) {
             if (debug) {
                 System.out.println("Removing all stale group metadata: " + allSCIMGroups.toString());

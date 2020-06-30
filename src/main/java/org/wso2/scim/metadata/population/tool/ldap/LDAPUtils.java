@@ -17,7 +17,6 @@ import javax.naming.directory.SearchResult;
 
 public class LDAPUtils {
 
-    private static ConfigParser configParser;
     private static String LDAP_URL;
     private static String LDAP_USER;
     private static String LDAP_PASSWORD;
@@ -27,35 +26,63 @@ public class LDAPUtils {
     private static String KEYSTORE;
     private static String KEYSTORE_PASSWORD;
 
+    private static String USERSTORE_TYPE;
     private static String NAME_ATTRIBUTE;
     private static String UUID_ATTRIBUTE;
     private static String CREATED_AT_ATTRIBUTE;
     private static String UPDATED_AT_ATTRIBUTE;
 
-    private static boolean debug;
-
     private static Calendar calendarForTimestampConversion;
 
-    public static ArrayList<SCIMGroup> getAllGroupsFromLDAP() throws IdentityException {
+    public static ArrayList<SCIMGroup> getAllGroupsFromLDAP(ConfigParser userstoreConfigs, boolean isDebug)
+            throws IdentityException {
 
-        configParser = new ConfigParser();
-        debug = Boolean.valueOf(configParser.getProperty("DEBUG_MODE"));
-        LDAP_URL = configParser.getProperty("LDAP_URL");
-        LDAP_USER = configParser.getProperty("LDAP_USER");
-        LDAP_PASSWORD = configParser.getProperty("LDAP_PASSWORD");
-        GROUP_SEARCH_BASE = configParser.getProperty("GROUP_SEARCH_BASE");
-        GROUP_SEARCH_FILTER = configParser.getProperty("GROUP_SEARCH_FILTER");
+        LDAP_URL = userstoreConfigs.getProperty("LDAP_URL");
+        LDAP_USER = userstoreConfigs.getProperty("LDAP_USER");
+        LDAP_PASSWORD = userstoreConfigs.getProperty("LDAP_PASSWORD");
+        GROUP_SEARCH_BASE = userstoreConfigs.getProperty("GROUP_SEARCH_BASE");
+        GROUP_SEARCH_FILTER = userstoreConfigs.getProperty("GROUP_SEARCH_FILTER");
         LDAP_REFERRAL = "ignore";
-        KEYSTORE = configParser.getProperty("KEYSTORE");
-        KEYSTORE_PASSWORD = configParser.getProperty("KEYSTORE_PASSWORD");
-        NAME_ATTRIBUTE = configParser.getProperty("NAME_ATTRIBUTE");
-        UUID_ATTRIBUTE = configParser.getProperty("UUID_ATTRIBUTE");
-        CREATED_AT_ATTRIBUTE = configParser.getProperty("CREATED_AT_ATTRIBUTE");
-        UPDATED_AT_ATTRIBUTE = configParser.getProperty("UPDATED_AT_ATTRIBUTE");
+        KEYSTORE = userstoreConfigs.getProperty("KEYSTORE");
+        KEYSTORE_PASSWORD = userstoreConfigs.getProperty("KEYSTORE_PASSWORD");
+
+        USERSTORE_TYPE = userstoreConfigs.getProperty("USERSTORE_TYPE");
+
+        NAME_ATTRIBUTE = userstoreConfigs.getProperty("NAME_ATTRIBUTE");
+        if (NAME_ATTRIBUTE == null) {
+            NAME_ATTRIBUTE = "cn";
+        }
+
+        UUID_ATTRIBUTE = userstoreConfigs.getProperty("UUID_ATTRIBUTE");
+        if (UUID_ATTRIBUTE == null && USERSTORE_TYPE != null) {
+            if (USERSTORE_TYPE.equalsIgnoreCase("ad")){
+                UUID_ATTRIBUTE = "objectGUID";
+            } else {
+                UUID_ATTRIBUTE = "entryUUID";
+            }
+        }
+
+        CREATED_AT_ATTRIBUTE = userstoreConfigs.getProperty("CREATED_AT_ATTRIBUTE");
+        if (CREATED_AT_ATTRIBUTE == null && USERSTORE_TYPE != null) {
+            if (USERSTORE_TYPE.equalsIgnoreCase("ad")){
+                CREATED_AT_ATTRIBUTE = "whenCreated";
+            } else {
+                CREATED_AT_ATTRIBUTE = "createTimestamp";
+            }
+        }
+
+        UPDATED_AT_ATTRIBUTE = userstoreConfigs.getProperty("UPDATED_AT_ATTRIBUTE");
+        if (UPDATED_AT_ATTRIBUTE == null && USERSTORE_TYPE != null) {
+            if (USERSTORE_TYPE.equalsIgnoreCase("ad")){
+                UPDATED_AT_ATTRIBUTE = "whenChanged";
+            } else {
+                UPDATED_AT_ATTRIBUTE = "modifyTimestamp";
+            }
+        }
 
         ArrayList<SCIMGroup> allGroups = new ArrayList<>();
 
-        if (debug) {
+        if (isDebug) {
             System.out.println("LDAP URL: " + LDAP_URL);
             System.out.println("LDAP User: " + LDAP_USER);
             System.out.println("LDAP Search Base: " + GROUP_SEARCH_BASE);
@@ -63,6 +90,10 @@ public class LDAPUtils {
             System.out.println("LDAP Referral: " + LDAP_REFERRAL);
             System.out.println("LDAP Attribute: " + NAME_ATTRIBUTE);
             System.out.println("Trust store location: " + KEYSTORE);
+            System.out.println("Userstore Type: " + USERSTORE_TYPE);
+            System.out.println("UUID Attribute: " + UUID_ATTRIBUTE);
+            System.out.println("CreatedAt Attribute: " + CREATED_AT_ATTRIBUTE);
+            System.out.println("UpdatedAt Attribute: " + UPDATED_AT_ATTRIBUTE);
         }
 
         System.setProperty("javax.net.ssl.trustStore", KEYSTORE);
@@ -82,7 +113,7 @@ public class LDAPUtils {
         SearchResult searchResult = null;
 
         try {
-            if (debug) System.out.println("Initializing DirContext");
+            if (isDebug) System.out.println("Initializing DirContext");
             dirContext = new InitialDirContext(environment);
 
             SearchControls searchControls = new SearchControls();
@@ -120,12 +151,12 @@ public class LDAPUtils {
                         id = String.valueOf(ido);
                     }
 
-                    if (debug) System.out.println("\nFound group: " + name + " with ID: " + id);
+                    if (isDebug) System.out.println("\nFound group: " + name + " with ID: " + id);
                     SCIMGroup group = new SCIMGroup(name, id);
 
                     String createdAt;
                     if (attributes.get(CREATED_AT_ATTRIBUTE) == null) {
-                        if (debug) System.out.println("createdAt time was null, using current timestamp instead.");
+                        if (isDebug) System.out.println("createdAt time was null, using current timestamp instead.");
                         createdAt = getCurrentTime();
                     } else {
                         createdAt = String.valueOf(attributes.get(CREATED_AT_ATTRIBUTE).get(0));
@@ -134,7 +165,7 @@ public class LDAPUtils {
 
                     String updatedAt;
                     if (attributes.get(UPDATED_AT_ATTRIBUTE) == null) {
-                        if (debug) System.out.println("updatedAt time was null, using createdAt timestamp instead.");
+                        if (isDebug) System.out.println("updatedAt time was null, using createdAt timestamp instead.");
                         updatedAt = createdAt;
                     } else {
                         updatedAt = String.valueOf(attributes.get(UPDATED_AT_ATTRIBUTE).get(0));

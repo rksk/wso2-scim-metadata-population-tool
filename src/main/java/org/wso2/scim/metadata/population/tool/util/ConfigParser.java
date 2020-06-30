@@ -9,14 +9,17 @@ import java.util.Properties;
 
 public class ConfigParser {
 
-    private static final String CONFIG_FILE = "config.properties";
+    private static final String DEFAULT_CONFIG_FILE = "config.properties";
     private final Properties properties = new Properties();
 
     public ConfigParser() throws IdentityException {
-        try (InputStream input = new FileInputStream(CONFIG_FILE)) {
+        this(DEFAULT_CONFIG_FILE);
+    }
+    public ConfigParser(String configFile) throws IdentityException {
+        try (InputStream input = new FileInputStream(configFile)) {
             properties.load(input);
         } catch (IOException e) {
-            throw new IdentityException("Can't find/read config file: " + CONFIG_FILE, e);
+            throw new IdentityException("Can't find/read config file: " + configFile, e);
         }
     }
 
