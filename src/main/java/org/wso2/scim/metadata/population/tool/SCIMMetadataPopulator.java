@@ -14,7 +14,7 @@ class SCIMMetadataPopulator {
     private static String userstoreDomain;
     private static String baseLocation;
     private static boolean debug;
-    private static int added, renamed, updated, deleted;
+    private static int added, renamed, updated, deleted, failed;
     private static ConfigParser configParser;
 
     public static void main(String[] args) {
@@ -27,6 +27,10 @@ class SCIMMetadataPopulator {
             debug = Boolean.valueOf(configParser.getProperty("DEBUG_MODE"));
 
             ArrayList<SCIMGroup> allLDAPgroups = LDAPUtils.getAllGroupsFromLDAP();
+            if (allLDAPgroups.size() == 0) {
+                System.out.println("=== No groups found in the LDAP/AD userstore. ===\n");
+                System.exit(0);
+            }
 
             System.out.println("=== " + allLDAPgroups.size() + " group(s) found in the LDAP/AD userstore. ===\n");
 
@@ -36,12 +40,19 @@ class SCIMMetadataPopulator {
             // remove any stale data on Identity DB
             removeStaleGroupsFromDB(allLDAPgroups);
 
-            // close DB connection at the end
-            DBUtils.closeConnection(DBUtils.getDBConnection());
         } catch (IdentityException e) {
             System.out.println("=== An error occurred! ===");
             e.printStackTrace();
             System.out.println("=======================");
+        } finally {
+            // close DB connection at the end
+            try {
+                DBUtils.closeConnection(DBUtils.getDBConnection());
+            } catch (IdentityException e) {
+                System.out.println("=== An error occurred while closing the DB connection ===");
+                e.printStackTrace();
+                System.out.println("=======================");
+            }
         }
 
         System.out.println(String.format(
@@ -49,7 +60,8 @@ class SCIMMetadataPopulator {
                 "\nAdded groups: %s" +
                 "\nRenamed groups: %s" +
                 "\nUpdated groups: %s" +
-                "\nDeleted groups: %s", added, renamed, updated, deleted));
+                "\nDeleted groups: %s" +
+                "\nFailed groups: %s", added, renamed, updated, deleted, failed));
 
     }
 
@@ -62,7 +74,14 @@ class SCIMMetadataPopulator {
             } else {
                 System.out.println(group.getName());
             }
-            provisionGroup(group);
+            try {
+                provisionGroup(group);
+            } catch (Exception e) {
+                System.out.println("=== An error occurred while provisioning group: " + group.getName() + " ===");
+                e.printStackTrace();
+                System.out.println("=======================");
+                failed++;
+            }
             System.out.println();
         }
     }
