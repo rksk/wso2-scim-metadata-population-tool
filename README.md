@@ -52,6 +52,7 @@ Valid client-truststore configuration are mandatory if we are using `ldaps` in t
 Sample configs can be found in the `ad.properties` and `ldap.properties` files in this repository.
 
 ## Steps to execute the tool
+It is better to take a backup of the `IDN_SCIM_GROUP` table before executing this tool.
 
 * First compile the code with following command.
 ```
