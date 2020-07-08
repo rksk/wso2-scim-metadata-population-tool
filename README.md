@@ -40,12 +40,14 @@ LDAP_URL = <connection URL>
 LDAP_USER = <admin user>
 LDAP_PASSWORD = <admin password>
 GROUP_SEARCH_BASE = <group search base>>
-GROUP_SEARCH_FILTER = <group search filter>
+GROUP_SEARCH_FILTER = <group name list filter>
 KEYSTORE = <path to client-truststore.jks>
 KEYSTORE_PASSWORD = <client-truststore password>
 
 USERSTORE_TYPE = <userstore type; LDAP/AD>
 ```
+
+Since we are going to provision all the groups on the external userstore, you can use `GroupNameListFilter` value of your userstore configuration as the `GROUP_SEARCH_FILTER` value.
 
 Valid client-truststore configuration are mandatory if we are using `ldaps` in the connection URL.
 
